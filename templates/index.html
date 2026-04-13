@@ -757,6 +757,10 @@
     </div>
 
     <script>
+        // API 配置 - 改成你的云服务器地址
+        // 本地开发时留空，生产环境填写如：https://api.your-domain.com
+        const API_BASE_URL = '';
+
         const chatMessages = document.getElementById('chat-messages');
         const questionInput = document.getElementById('question-input');
         const submitBtn = document.getElementById('submit-btn');
@@ -915,7 +919,7 @@
             questionInput.focus();
 
             // 调用后端重置
-            fetch('/api/reset', { method: 'POST' });
+            fetch(`${API_BASE_URL}/api/reset`, { method: 'POST' });
         });
 
         function addMessage(role, content, model = null) {
@@ -1019,7 +1023,7 @@
             showTyping();
 
             try {
-                const response = await fetch('/api/chat', {
+                const response = await fetch(`${API_BASE_URL}/api/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ question })
