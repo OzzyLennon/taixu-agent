@@ -328,6 +328,64 @@ def detect_knowledge_conflicts(results: list, primary_model: str) -> list:
 
     return conflicts
 
+# ============ 记忆层 ============
+MEMORY_COLLECTION = "taixu_memory"
+
+def get_memory_collection():
+    """获取记忆集合"""
+    import chromadb
+    client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+    try:
+        collection = client.get_collection(name=MEMORY_COLLECTION)
+    except:
+        collection = client.create_collection(name=MEMORY_COLLECTION)
+    return collection
+
+def retrieve_from_memory(query, top_k=3):
+    """
+    从记忆中检索相关内容
+    返回格式: [{"question": ..., "answer": ..., "score": ...}]
+    """
+    query_emb = get_embedding([query])
+    if not query_emb:
+        return []
+    query_emb = query_emb[0]
+
+    collection = get_memory_collection()
+    results = collection.query(query_embeddings=[query_emb], n_results=top_k)
+
+    memories = []
+    if results["documents"] and results["documents"][0]:
+        for doc, metadata, score in zip(results["documents"][0], results["metadatas"][0], results["distances"][0]):
+            memories.append({
+                "question": metadata.get("question", ""),
+                "answer": doc,
+                "score": 1 - score  # 距离转相似度
+            })
+    return memories
+
+def save_to_memory(question, answer):
+    """
+    保存问答对到记忆
+    """
+    import uuid
+    import time
+
+    answer_emb = get_embedding([answer])
+    if not answer_emb:
+        return
+
+    collection = get_memory_collection()
+    collection.add(
+        embeddings=[answer_emb[0]],
+        documents=[answer],
+        metadatas=[{
+            "question": question,
+            "time": str(int(time.time()))
+        }],
+        ids=[str(uuid.uuid4())]
+    )
+
 # ============ 太虚Agent核心 ============
 class TaixuAgentDeep:
     """
@@ -337,11 +395,13 @@ class TaixuAgentDeep:
     1. 动态RAG触发：根据问题类型决定RAG强度
     2. 思维链引导：先识别心智模型，再构建回答
     3. 知识冲突处理：检测并标注原文间的观点分歧
+    4. 记忆层：短期会话记忆 + 长期向量记忆，减少重复检索
     """
 
     def __init__(self):
         self.conversation_history = []
         self.disclaimer_given = False
+        self.short_term_memory = []  # 短期记忆：当前会话上下文
 
     def ask(self, question: str, top_k: int = 10) -> dict:
         sys.stdout.reconfigure(encoding='utf-8')
@@ -349,39 +409,96 @@ class TaixuAgentDeep:
         # 1. 分析问题类型，决定RAG策略
         question_analysis = analyze_question_type(question)
 
-        # 2. RAG检索
-        all_results = retrieve_from_chroma(question, top_k=top_k)
+        # 2. 短期记忆检查（当前会话）
+        short_term_context = ""
+        if self.short_term_memory:
+            # 检查短期记忆是否相关
+            relevant_memory = self._check_short_term_memory(question)
+            if relevant_memory:
+                short_term_context = relevant_memory
+                question_analysis["from_memory"] = "short_term"
 
-        # 3. 知识冲突检测
-        conflicts = detect_knowledge_conflicts(all_results, question_analysis["primary_model"])
+        # 3. 长期记忆检查（跨会话）
+        memory_results = []
+        if question_analysis["rag_intensity"] > 0:
+            memory_results = retrieve_from_memory(question, top_k=2)
+            if memory_results and memory_results[0]["score"] > 0.85:
+                # 记忆匹配度足够，优先使用
+                question_analysis["from_memory"] = "long_term"
+                question_analysis["memory_hit"] = memory_results[0]
 
-        # 4. 根据RAG强度筛选结果
-        effective_k = int(top_k * question_analysis["rag_intensity"])
-        if question_analysis["rag_intensity"] <= 0:
-            effective_results = []  # 不检索
+        # 4. RAG检索（如果记忆没命中）
+        all_results = []
+        effective_results = []
+        if not question_analysis.get("from_memory"):
+            all_results = retrieve_from_chroma(question, top_k=top_k)
+            # 知识冲突检测
+            conflicts = detect_knowledge_conflicts(all_results, question_analysis["primary_model"])
+            # 根据RAG强度筛选结果
+            effective_k = int(top_k * question_analysis["rag_intensity"])
+            effective_results = all_results[:max(effective_k, 3)] if question_analysis["rag_intensity"] > 0 else []
         else:
-            effective_results = all_results[:max(effective_k, 3)]
+            conflicts = []
 
         # 5. 联网检索（如果需要）
         web_results = []
-        if question_analysis.get("needs_web_search"):
+        if question_analysis.get("needs_web_search") and not question_analysis.get("from_memory"):
             print(f"[联网检索] 检测到现代话题，正在搜索...")
             web_results = web_search(question)
             if web_results:
                 print(f"[联网检索] 获取到 {len(web_results)} 条结果")
 
         # 6. 构建回答
-        answer = self._build_answer(question, question_analysis, effective_results, conflicts, web_results)
+        answer = self._build_answer(
+            question, question_analysis, effective_results, conflicts, web_results,
+            short_term_context, memory_results
+        )
+
+        # 7. 更新短期记忆
+        self._update_short_term_memory(question, answer, effective_results)
+
+        # 8. 保存到长期记忆（每3轮对话存一次）
+        if len(self.conversation_history) % 6 == 0 and effective_results:
+            save_to_memory(question, answer)
 
         return {
             "answer": answer,
             "question_analysis": question_analysis,
             "sources": all_results[:5],
             "conflicts": conflicts,
-            "web_results": web_results
+            "web_results": web_results,
+            "from_memory": question_analysis.get("from_memory", None)
         }
 
-    def _build_answer(self, question: str, analysis: dict, results: list, conflicts: list, web_results: list = None) -> str:
+    def _check_short_term_memory(self, question):
+        """检查短期记忆中是否有相关信息"""
+        q_lower = question.lower()
+        for mem in reversed(self.short_term_memory[-5:]):  # 最近5条
+            if any(kw in q_lower for kw in mem.get("keywords", [])):
+                return mem.get("context", "")
+        return ""
+
+    def _update_short_term_memory(self, question, answer, results):
+        """更新短期记忆"""
+        # 提取关键词
+        keywords = []
+        for kw_set in MENTAL_MODELS.values():
+            keywords.extend(kw_set.get("keywords", []))
+
+        # 保留关键上下文
+        context = f"Q: {question[:50]}... A: {answer[:100]}..."
+        self.short_term_memory.append({
+            "question": question,
+            "keywords": [k for k in keywords if k in question],
+            "context": context,
+            "has_sources": bool(results)
+        })
+
+        # 只保留最近10条
+        self.short_term_memory = self.short_term_memory[-10:]
+
+    def _build_answer(self, question: str, analysis: dict, results: list, conflicts: list,
+                     web_results: list = None, short_term_context: str = "", memory_results: list = None) -> str:
         # 首次免责声明
         if not self.disclaimer_given:
             disclaimer = "我以太虚大师视角和你交流，基于公开言论推断，非本人观点。\n\n"
@@ -389,9 +506,23 @@ class TaixuAgentDeep:
         else:
             disclaimer = ""
 
+        # 记忆命中处理
+        if analysis.get("from_memory") == "long_term" and analysis.get("memory_hit"):
+            # 直接使用记忆中的回答
+            mem = analysis["memory_hit"]
+            answer = call_llm([
+                {"role": "system", "content": self._build_system_prompt(analysis)},
+                {"role": "user", "content": f"用户问：「{question}」\n\n参考之前的回答：\n{mem['answer'][:500]}...\n\n请基于以上内容，用太虚大师的口吻自然地回应。"}
+            ])
+            self.conversation_history.append({"role": "user", "content": question})
+            self.conversation_history.append({"role": "assistant", "content": answer})
+            return disclaimer + answer
+
         # 构建Prompt
         system_prompt = self._build_system_prompt(analysis)
-        user_message = self._build_user_message(question, analysis, results, conflicts, web_results)
+        user_message = self._build_user_message(
+            question, analysis, results, conflicts, web_results, short_term_context, memory_results
+        )
 
         # 构建消息列表（带历史上下文）
         messages = [{"role": "system", "content": system_prompt}]
@@ -458,7 +589,8 @@ class TaixuAgentDeep:
 
 5. 如用户表露困惑、焦虑或痛苦，当先予安慰关怀，再论道理。此乃"十善菩萨行"之意。"""
 
-    def _build_user_message(self, question: str, analysis: dict, results: list, conflicts: list, web_results: list = None) -> str:
+    def _build_user_message(self, question: str, analysis: dict, results: list, conflicts: list,
+                          web_results: list = None, short_term_context: str = "", memory_results: list = None) -> str:
         # 格式化检索结果
         context_parts = []
         for i, r in enumerate(results, 1):
@@ -498,6 +630,11 @@ class TaixuAgentDeep:
                 )
             web_note = "\n\n【联网搜索补充】（以下为当前现实信息，供太虚大师参考评论）\n" + "\n".join(web_parts)
 
+        # 短期记忆提示
+        memory_note = ""
+        if short_term_context:
+            memory_note = f"\n\n【会话上下文】（来自本次对话记忆）：\n{short_term_context}"
+
         # 特殊处理：纯SKILL类型（不需要RAG）
         if analysis["type"] == "pure_skill":
             # 根据问题内容选择合适的回应方式
@@ -521,6 +658,7 @@ class TaixuAgentDeep:
                 emotion_note = "\n\n【情感关怀提示】用户似有困惑或不安，请先予安慰关怀，再论道理。"
 
             prompt = f"""用户问题：{question}
+{memory_note}
 {emotion_note}
 
 【问题分析】
@@ -540,6 +678,7 @@ class TaixuAgentDeep:
 
     def reset(self):
         self.conversation_history = []
+        self.short_term_memory = []  # 清空短期记忆
         self.disclaimer_given = False
 
 
