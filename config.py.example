@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+"""
+配置文件 - 请复制为 config.py 并填入你的 API Key
+"""
+import os
+
+# 硅基流动 API Key（从环境变量或 config.local 读取）
+SILICONFLOW_API_KEY = os.environ.get("SILICONFLOW_API_KEY", "your-api-key-here")
+
+# API 端点
+LLM_URL = "https://api.siliconflow.cn/v1/chat/completions"
+EMBEDDING_URL = "https://api.siliconflow.cn/v1/embeddings"
+RERANKER_URL = "https://api.siliconflow.cn/v1/rerank"
+
+# ChromaDB 配置
+CHROMA_DIR = Path(__file__).parent / "chromadb"
+COLLECTION_NAME = "taixu_master"
+
+# 检索参数
+INITIAL_TOP_K = 30
+RERANK_TOP_K = 10
+
+# 联网检索配置
+WEB_SEARCH_ENABLED = True
+WEB_SEARCH_TOP_K = 5

@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# Environment - 包含敏感信息
+.env
+.env.local
+config.py  # 用户自行创建，填入 API Key
+
+# ChromaDB (vector database - too large to commit)
+chromadb/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

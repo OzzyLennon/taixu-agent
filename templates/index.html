@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>太虚大师 Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* 太虚主题色 - 禅意素雅 */
+            --bg-dark: #0f0f0f;
+            --bg-card: #1a1a1a;
+            --bg-input: #252525;
+            --text-primary: #f5f5f0;
+            --text-secondary: #a0a095;
+            --text-muted: #606058;
+            --accent: #c9a86c;
+            --accent-glow: rgba(201, 168, 108, 0.15);
+            --border: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(255, 255, 255, 0.15);
+            --radius: 16px;
+            --radius-lg: 24px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100dvh;
+            line-height: 1.6;
+        }
+
+        /* 背景纹理 */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(201, 168, 108, 0.08), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 100%, rgba(201, 168, 108, 0.05), transparent);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
+        header {
+            padding: 60px 0 40px;
+            text-align: center;
+        }
+
+        .logo-mark {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 24px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Noto Serif SC', serif;
+            font-size: 28px;
+            color: var(--accent);
+            background: var(--bg-card);
+            box-shadow: 0 0 40px var(--accent-glow);
+        }
+
+        header h1 {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 2rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        /* 聊天容器 */
+        .chat-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+
+        /* 消息区域 */
+        .chat-messages {
+            padding: 32px;
+            min-height: 400px;
+            max-height: 55vh;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: var(--text-muted);
+            border-radius: 3px;
+        }
+
+        /* 消息气泡 */
+        .message {
+            margin-bottom: 28px;
+            opacity: 0;
+            transform: translateY(16px);
+            animation: messageIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .message:last-child {
+            margin-bottom: 0;
+        }
+
+        @keyframes messageIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            text-align: right;
+        }
+
+        .message-content {
+            display: inline-block;
+            max-width: 85%;
+            padding: 16px 20px;
+            border-radius: var(--radius);
+            line-height: 1.7;
+            font-size: 0.95rem;
+            text-align: left;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .message.taixu .message-content {
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        /* 消息标签 */
+        .message-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 0.8rem;
+        }
+
+        .message.user .message-label {
+            justify-content: flex-end;
+        }
+
+        .model-tag {
+            background: var(--accent-glow);
+            color: var(--accent);
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            border: 1px solid rgba(201, 168, 108, 0.2);
+        }
+
+        /* 分析面板 */
+        .analysis-panel {
+            padding: 12px 20px;
+            background: rgba(201, 168, 108, 0.05);
+            border-top: 1px solid rgba(201, 168, 108, 0.1);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            display: none;
+        }
+
+        .analysis-panel.visible {
+            display: block;
+        }
+
+        .analysis-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-right: 16px;
+        }
+
+        .analysis-item span:first-child {
+            color: var(--text-muted);
+        }
+
+        /* 历史面板 */
+        .history-panel {
+            position: fixed;
+            right: -320px;
+            top: 0;
+            width: 320px;
+            height: 100dvh;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border);
+            z-index: 1000;
+            transition: right 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .history-panel.open {
+            right: 0;
+        }
+
+        .history-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .history-header h3 {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .history-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 4px;
+        }
+
+        .history-close:hover {
+            color: var(--text-primary);
+        }
+
+        .history-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+        }
+
+        .history-item {
+            padding: 12px;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .history-item:hover {
+            border-color: var(--border-hover);
+            background: #2a2a2a;
+        }
+
+        .history-question {
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .history-time {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .history-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        .history-toggle-btn {
+            position: fixed;
+            right: 16px;
+            bottom: 100px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--accent);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+            z-index: 999;
+        }
+
+        .history-toggle-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+        }
+
+        /* 来源面板 - 可折叠 */
+        .sources-panel {
+            border-top: 1px solid var(--border);
+            display: none;
+        }
+
+        .sources-panel.visible {
+            display: block;
+        }
+
+        .sources-panel-header {
+            padding: 12px 20px;
+            background: var(--bg-input);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        .sources-panel-header:hover {
+            background: #2a2a2a;
+        }
+
+        .sources-panel-header h4 {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin: 0;
+        }
+
+        .sources-panel-header .toggle-icon {
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            transition: transform 0.2s;
+        }
+
+        .sources-panel-header.expanded .toggle-icon {
+            transform: rotate(90deg);
+        }
+
+        .sources-list-wrapper {
+            max-height: 0;
+            overflow: hidden;
+            background: var(--bg-input);
+            transition: max-height 0.3s ease;
+        }
+
+        .sources-list-wrapper.expanded {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .sources-list {
+            padding: 12px 20px 16px;
+        }
+
+        .source-item {
+            background: var(--bg-card);
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            border: 1px solid var(--border);
+            transition: border-color 0.2s;
+        }
+
+        .source-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .source-item:hover {
+            border-color: var(--border-hover);
+        }
+
+        .source-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+
+        .source-title {
+            color: var(--accent);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .source-title .expand-icon {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            transition: transform 0.2s;
+        }
+
+        .source-item.expanded .source-title .expand-icon {
+            transform: rotate(90deg);
+        }
+
+        .source-score {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .source-content {
+            display: none;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.7;
+            white-space: pre-wrap;
+        }
+
+        .source-item.expanded .source-content {
+            display: block;
+        }
+
+        /* 联网搜索面板 */
+        .web-panel {
+            padding: 16px 20px;
+            background: rgba(100, 180, 255, 0.05);
+            border-top: 1px solid rgba(100, 180, 255, 0.15);
+            max-height: 180px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .web-panel.visible {
+            display: block;
+        }
+
+        .web-panel h4 {
+            color: #64b4ff;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+        }
+
+        .web-item {
+            background: var(--bg-card);
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            border: 1px solid rgba(100, 180, 255, 0.2);
+            transition: border-color 0.2s;
+        }
+
+        .web-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .web-item:hover {
+            border-color: rgba(100, 180, 255, 0.4);
+        }
+
+        .web-title {
+            color: #64b4ff;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        .web-snippet {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            line-height: 1.5;
+        }
+
+        /* 输入区 */
+        .input-area {
+            padding: 20px 24px;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        #question-input {
+            width: 100%;
+            padding: 14px 20px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        #question-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        #question-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        #submit-btn {
+            padding: 14px 28px;
+            background: var(--accent);
+            color: var(--bg-dark);
+            border: none;
+            border-radius: var(--radius);
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        #submit-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        #submit-btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        #submit-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* 输入中动画 */
+        .typing-indicator {
+            padding: 16px 20px;
+            display: none;
+        }
+
+        .typing-indicator.visible {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--text-muted);
+            border-radius: 50%;
+            animation: typingBounce 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typingBounce {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-6px); }
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 24px;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        /* 响应式 */
+        @media (max-width: 640px) {
+            .container {
+                padding: 0 16px;
+            }
+
+            header {
+                padding: 40px 0 24px;
+            }
+
+            header h1 {
+                font-size: 1.5rem;
+            }
+
+            .chat-messages {
+                padding: 20px;
+                max-height: 45vh;
+            }
+
+            .message-content {
+                max-width: 92%;
+                padding: 12px 16px;
+                font-size: 0.9rem;
+            }
+
+            .input-area {
+                padding: 16px;
+                flex-direction: column;
+            }
+
+            #submit-btn {
+                width: 100%;
+                padding: 14px;
+            }
+
+            .history-panel {
+                width: 280px;
+            }
+
+            .history-toggle-btn {
+                right: 12px;
+                bottom: 80px;
+            }
+        }
+
+        /* 动效 - 入场动画 */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        header { animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both; }
+        .chat-container { animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both; }
+        .input-area { animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both; }
+
+        /* 滚动条样式 */
+        .sources-panel::-webkit-scrollbar,
+        .chat-messages::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .sources-panel::-webkit-scrollbar-thumb,
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: var(--text-muted);
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo-mark">佛</div>
+            <h1>太虚大师 Agent</h1>
+            <p>以民国四大高僧·太虚法师视角，与你论佛教革新</p>
+        </header>
+
+        <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+                <div class="message taixu">
+                    <div class="message-label">
+                        <span class="model-tag">太虚</span>
+                    </div>
+                    <div class="message-content">
+                        阿弥陀佛！贫僧太虚，有什么问题，尽管来问。
+                    </div>
+                </div>
+            </div>
+
+            <div class="sources-panel" id="sources-panel">
+                <div class="sources-panel-header" id="sources-header">
+                    <h4>参考原文</h4>
+                    <span class="toggle-icon">▶</span>
+                </div>
+                <div class="sources-list-wrapper" id="sources-wrapper">
+                    <div class="sources-list" id="sources-list"></div>
+                </div>
+            </div>
+
+            <div class="web-panel" id="web-panel">
+                <h4>联网补充</h4>
+                <div id="web-list"></div>
+            </div>
+
+            <div class="typing-indicator" id="typing-indicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <input type="text" id="question-input" placeholder="输入你的问题..." autocomplete="off">
+                </div>
+                <button id="submit-btn">提问</button>
+            </div>
+        </div>
+
+        <footer>
+            太虚大师 Agent · 禅心智慧
+        </footer>
+
+        <!-- 历史面板 -->
+        <div class="history-panel" id="history-panel">
+            <div class="history-header">
+                <h3>历史问答</h3>
+                <div style="display:flex;gap:8px;">
+                    <button class="history-close" id="history-close">×</button>
+                </div>
+            </div>
+            <div style="padding:12px;border-bottom:1px solid var(--border);">
+                <button id="new-chat-btn" style="width:100%;padding:10px;border-radius:10px;background:var(--accent);color:var(--bg-dark);border:none;cursor:pointer;font-weight:600;">开启新对话</button>
+            </div>
+            <div class="history-list" id="history-list">
+                <div class="history-empty">暂无历史记录</div>
+            </div>
+        </div>
+
+        <!-- 历史面板开关 -->
+        <button class="history-toggle-btn" id="history-toggle" title="历史记录">☰</button>
+    </div>
+
+    <script>
+        const chatMessages = document.getElementById('chat-messages');
+        const questionInput = document.getElementById('question-input');
+        const submitBtn = document.getElementById('submit-btn');
+        const sourcesPanel = document.getElementById('sources-panel');
+        const sourcesList = document.getElementById('sources-list');
+        const sourcesHeader = document.getElementById('sources-header');
+        const sourcesWrapper = document.getElementById('sources-wrapper');
+        const webPanel = document.getElementById('web-panel');
+        const webList = document.getElementById('web-list');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const historyPanel = document.getElementById('history-panel');
+        const historyList = document.getElementById('history-list');
+        const historyToggle = document.getElementById('history-toggle');
+        const historyClose = document.getElementById('history-close');
+        const newChatBtn = document.getElementById('new-chat-btn');
+
+        let isLoading = false;
+        let messageCount = 0;
+
+        // 当前会话的所有消息
+        let currentSession = [];
+        // 历史会话列表（永久存储）
+        let chatHistory = JSON.parse(localStorage.getItem('taixu_sessions') || '[]');
+        // 当前激活的历史会话索引（-1表示新会话）
+        let activeHistoryIdx = -1;
+
+        function formatTime(date) {
+            const h = date.getHours().toString().padStart(2, '0');
+            const m = date.getMinutes().toString().padStart(2, '0');
+            return `${h}:${m}`;
+        }
+
+        function saveHistory() {
+            localStorage.setItem('taixu_sessions', JSON.stringify(chatHistory));
+        }
+
+        function renderHistory() {
+            if (chatHistory.length === 0) {
+                historyList.innerHTML = '<div class="history-empty">暂无历史记录</div>';
+                return;
+            }
+            historyList.innerHTML = chatHistory.map((session, idx) => `
+                <div class="history-item" data-idx="${idx}">
+                    <div class="history-question">${session.title}</div>
+                    <div class="history-time">${session.time}</div>
+                </div>
+            `).join('');
+
+            // 绑定点击事件 - 恢复完整会话
+            document.querySelectorAll('.history-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const idx = parseInt(item.dataset.idx);
+                    restoreSession(idx);
+                });
+            });
+        }
+
+        function restoreSession(idx) {
+            const session = chatHistory[idx];
+            if (!session) return;
+
+            // 清空当前显示
+            chatMessages.innerHTML = '';
+            currentSession = [];
+            messageCount = 0;
+
+            // 恢复所有消息
+            session.messages.forEach(msg => {
+                addMessage(msg.role, msg.content, msg.model);
+            });
+
+            // 标记当前激活的历史会话
+            activeHistoryIdx = idx;
+
+            // 隐藏来源和联网面板
+            sourcesPanel.classList.remove('visible');
+            webPanel.classList.remove('visible');
+
+            // 关闭历史面板
+            historyPanel.classList.remove('open');
+        }
+
+        function saveCurrentSession() {
+            if (currentSession.length === 0) return;
+
+            // 用第一条用户问题作为标题
+            const firstUserMsg = currentSession.find(m => m.role === 'user');
+            const title = firstUserMsg
+                ? firstUserMsg.content.substring(0, 30) + (firstUserMsg.content.length > 30 ? '...' : '')
+                : '新对话';
+
+            chatHistory.unshift({
+                title: title,
+                time: formatTime(new Date()),
+                messages: [...currentSession]
+            });
+
+            // 只保留最近50条会话
+            if (chatHistory.length > 50) {
+                chatHistory = chatHistory.slice(0, 50);
+            }
+
+            saveHistory();
+        }
+
+        function scrollToMessage(idx) {
+            const messages = document.querySelectorAll('.message');
+            if (messages[idx * 2 + 1]) { // user message is at idx*2, then taixu at idx*2+1
+                messages[idx * 2 + 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        // 过滤语气描述（如"（稍顿，微笑）"、"（合十）"等）
+        function stripToneDescriptions(text) {
+            return text
+                .replace(/（[^）]*[微微笑低眉展眉合十垂目]*[^）]*）/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        // 打开/关闭历史面板
+        historyToggle.addEventListener('click', () => {
+            historyPanel.classList.add('open');
+        });
+
+        historyClose.addEventListener('click', () => {
+            historyPanel.classList.remove('open');
+        });
+
+        // 开启新对话
+        newChatBtn.addEventListener('click', () => {
+            // 重置状态
+            chatMessages.innerHTML = `
+                <div class="message taixu">
+                    <div class="message-label">
+                        <span class="model-tag">太虚</span>
+                    </div>
+                    <div class="message-content">
+                        <p>阿弥陀佛！贫僧太虚，有什么问题，尽管来问。</p>
+                    </div>
+                </div>
+            `;
+            messageCount = 0;
+            currentSession = [];
+            activeHistoryIdx = -1;
+
+            // 隐藏来源和联网面板
+            sourcesPanel.classList.remove('visible');
+            webPanel.classList.remove('visible');
+
+            // 关闭历史面板
+            historyPanel.classList.remove('open');
+
+            // 聚焦输入框
+            questionInput.value = '';
+            questionInput.focus();
+
+            // 调用后端重置
+            fetch('/api/reset', { method: 'POST' });
+        });
+
+        function addMessage(role, content, model = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+
+            let labelHtml = '';
+            if (role === 'taixu' && model) {
+                labelHtml = `
+                    <div class="message-label">
+                        <span class="model-tag">${model}</span>
+                    </div>
+                `;
+            }
+
+            // 处理换行和空格
+            const formattedContent = content
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+            messageDiv.innerHTML = `
+                ${labelHtml}
+                <div class="message-content"><p>${formattedContent}</p></div>
+            `;
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            messageCount++;
+            messageDiv.dataset.msgId = messageCount;
+
+            // 保存到当前会话
+            currentSession.push({ role, content, model });
+        }
+
+        function showTyping() {
+            typingIndicator.classList.add('visible');
+            chatMessages.appendChild(typingIndicator);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function hideTyping() {
+            typingIndicator.classList.remove('visible');
+        }
+
+        function showSources(sources) {
+            if (sources && sources.length > 0) {
+                sourcesPanel.classList.add('visible');
+                sourcesList.innerHTML = sources.map((s, idx) => `
+                    <div class="source-item" data-idx="${idx}">
+                        <div class="source-header">
+                            <div class="source-title">
+                                <span class="expand-icon">▶</span>
+                                ${s.source}
+                            </div>
+                            <div class="source-score">${(s.score * 100).toFixed(1)}%</div>
+                        </div>
+                        <div class="source-content">${s.content}</div>
+                    </div>
+                `).join('');
+
+                // 绑定点击事件
+                document.querySelectorAll('.source-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        item.classList.toggle('expanded');
+                    });
+                });
+            }
+        }
+
+        // 点击Header切换展开/折叠
+        sourcesHeader.addEventListener('click', () => {
+            sourcesHeader.classList.toggle('expanded');
+            sourcesWrapper.classList.toggle('expanded');
+        });
+
+        function showWebResults(webResults) {
+            if (webResults && webResults.length > 0) {
+                webPanel.classList.add('visible');
+                webList.innerHTML = webResults.map(w => `
+                    <div class="web-item">
+                        <div class="web-title">${w.title}</div>
+                        <div class="web-snippet">${w.snippet}</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function sendQuestion() {
+            const question = questionInput.value.trim();
+            if (!question || isLoading) return;
+
+            isLoading = true;
+            submitBtn.disabled = true;
+            submitBtn.textContent = '思考中...';
+            questionInput.value = '';
+
+            // 添加用户消息
+            addMessage('user', question);
+            showTyping();
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+
+                const data = await response.json();
+
+                hideTyping();
+
+                if (data.error) {
+                    addMessage('taixu', `错误: ${data.error}`);
+                } else {
+                    // 过滤语气描述后再显示
+                    const cleanAnswer = stripToneDescriptions(data.answer);
+                    addMessage('taixu', cleanAnswer);
+
+                    // 显示来源
+                    if (data.sources && data.sources.length > 0) {
+                        showSources(data.sources);
+                    }
+
+                    // 显示联网结果
+                    if (data.web_results && data.web_results.length > 0) {
+                        showWebResults(data.web_results);
+                    }
+
+                    // 实时保存当前会话到历史
+                    if (currentSession.length > 0) {
+                        if (activeHistoryIdx >= 0) {
+                            // 更新已有历史会话
+                            chatHistory[activeHistoryIdx].messages = [...currentSession];
+                        } else {
+                            // 创建新历史会话
+                            const firstUserMsg = currentSession.find(m => m.role === 'user');
+                            const title = firstUserMsg
+                                ? firstUserMsg.content.substring(0, 30) + (firstUserMsg.content.length > 30 ? '...' : '')
+                                : '新对话';
+                            chatHistory.unshift({
+                                title: title,
+                                time: formatTime(new Date()),
+                                messages: [...currentSession]
+                            });
+                            activeHistoryIdx = 0;
+                            // 只保留最近50条会话
+                            if (chatHistory.length > 50) {
+                                chatHistory = chatHistory.slice(0, 50);
+                            }
+                        }
+                        saveHistory();
+                        renderHistory();
+                    }
+                }
+            } catch (error) {
+                hideTyping();
+                addMessage('taixu', `网络错误: ${error.message}`);
+            }
+
+            isLoading = false;
+            submitBtn.disabled = false;
+            submitBtn.textContent = '提问';
+            questionInput.focus();
+        }
+
+        // 事件绑定
+        submitBtn.addEventListener('click', sendQuestion);
+        questionInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendQuestion();
+        });
+
+        // 初始聚焦
+        questionInput.focus();
+
+        // 初始化历史记录
+        renderHistory();
+    </script>
+</body>
+</html>
